@@ -17,9 +17,10 @@ body {
     background:white;
     padding:30px;
     border-radius:20px;
-    width:400px;
+    width:450px;
     text-align:center;
     box-shadow:0 10px 30px rgba(0,0,0,0.2);
+    position:relative;
 }
 h1{
     color:#ff5722;
@@ -51,21 +52,40 @@ button:hover{
     height:100%;
     width:0%;
     background:linear-gradient(90deg,#66bb6a,#43a047);
-    transition:0.1s;
+    transition:0.1s linear;
 }
-.volume{
-    font-size:40px;
-    margin-top:10px;
+.volume-bar-container {
+    position:fixed;
+    bottom:20px;
+    left:20px;
+    width:30px;
+    height:150px;
+    background:#eee;
+    border-radius:15px;
+    display:none;
+    overflow:hidden;
 }
-#readPrize{
-    font-size:24px;
-    font-weight:bold;
-    color:#ff3d00;
-    margin-top:20px;
+.volume-bar {
+    position:absolute;
+    bottom:0;
+    width:100%;
+    height:0%;
+    background:linear-gradient(to top,#66bb6a,#43a047);
+    transition:0.05s linear;
+}
+.volume-threshold {
+    position:absolute;
+    width:100%;
+    height:2px;
+    background:red;
+    bottom:8%;
 }
 .page{display:none;}
 .page.active{display:block;}
 canvas{border-radius:15px; cursor:pointer; margin-top:20px;}
+.slider-container {
+    margin-top:15px;
+}
 </style>
 </head>
 <body>
@@ -75,6 +95,10 @@ canvas{border-radius:15px; cursor:pointer; margin-top:20px;}
 <!-- 首页 -->
 <div id="home" class="page active">
     <h1>🎉 课堂奖励系统</h1>
+    <div class="slider-container">
+        <label>朗读时间控制</label><br>
+        <input type="range" id="timeSlider" min="10" max="120" value="30" step="5">
+    </div>
     <button onclick="chooseMode('scratch')">刮刮乐奖励</button>
     <button onclick="chooseMode('read')">朗读进度奖励</button>
 </div>
@@ -89,13 +113,17 @@ canvas{border-radius:15px; cursor:pointer; margin-top:20px;}
 <!-- 朗读页面 -->
 <div id="readPage" class="page">
     <h1>🎤 大声朗读挑战</h1>
-    <div class="volume" id="emoji">😶</div>
     <button onclick="startRead()">开始朗读</button>
     <div id="progress">
         <div id="bar"></div>
     </div>
-    <div id="readPrize"></div>
+    <div id="readPrize" style="font-size:24px;font-weight:bold;color:#ff3d00;margin-top:20px;"></div>
     <button onclick="backHome()">返回首页</button>
+</div>
+
+<div class="volume-bar-container" id="volumeContainer">
+    <div class="volume-bar" id="volumeBar"></div>
+    <div class="volume-threshold" id="thresholdLine"></div>
 </div>
 
 </div>
@@ -181,12 +209,24 @@ function initScratch(){
 
 // ===== 朗读奖励 =====
 let progress = 0;
-let threshold = 0.03;
 let readAnimation = null;
-const emoji = document.getElementById('emoji');
+let totalTime = 30; 
+let startTimestamp = null;
+
+const volumeContainer = document.getElementById('volumeContainer');
+const volumeBar = document.getElementById('volumeBar');
+const thresholdLine = document.getElementById('thresholdLine');
+const bar = document.getElementById('bar');
 const readPrizeDiv = document.getElementById('readPrize');
 
 function startRead(){
+    totalTime = parseInt(document.getElementById('timeSlider').value);
+    volumeContainer.style.display='block';
+    progress=0;
+    bar.style.width="0%";
+    readPrizeDiv.innerHTML="";
+    startTimestamp = performance.now();
+
     navigator.mediaDevices.getUserMedia({audio:true})
     .then(stream=>{
         const audioContext = new AudioContext();
@@ -195,22 +235,26 @@ function startRead(){
         mic.connect(analyser);
         const data = new Uint8Array(analyser.frequencyBinCount);
 
+        const threshold = 0.08; // 降低阈值
+        thresholdLine.style.bottom=(threshold*100)+"%";
+
         function detect(){
             analyser.getByteFrequencyData(data);
             let sum = 0;
             for(let i=0;i<data.length;i++) sum+=data[i];
             let volume = sum/data.length/255;
 
-            if(volume>0.15) emoji.innerHTML="😆";
-            else if(volume>0.08) emoji.innerHTML="🙂";
-            else if(volume>0.03) emoji.innerHTML="😮";
-            else emoji.innerHTML="😶";
+            volumeBar.style.height=(volume*100)+"%";
 
-            if(volume>threshold) progress+=volume*2;
-            else progress-=0.2;
+            let speedFactor = 100/totalTime; 
+            if(volume>=threshold){
+                progress += speedFactor/60;
+            } else {
+                progress -= speedFactor/120; 
+            }
             if(progress<0) progress=0;
             if(progress>100) progress=100;
-            document.getElementById("bar").style.width=progress+"%";
+            bar.style.width=progress+"%";
 
             if(progress>=100){
                 showReadPrize();
@@ -218,15 +262,16 @@ function startRead(){
             }
             readAnimation = requestAnimationFrame(detect);
         }
-        detect();
+        readAnimation = requestAnimationFrame(detect);
     });
 }
 
 function resetRead(){
     progress=0;
-    document.getElementById("bar").style.width="0%";
-    emoji.innerHTML="😶";
+    bar.style.width="0%";
+    volumeBar.style.height="0%";
     readPrizeDiv.innerHTML="";
+    volumeContainer.style.display='none';
     if(readAnimation) cancelAnimationFrame(readAnimation);
 }
 
