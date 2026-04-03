@@ -7,7 +7,7 @@
 body {
     margin:0;
     font-family:"Comic Sans MS","Microsoft YaHei",sans-serif;
-    background: linear-gradient(135deg,#ffecb3,#ffe0b2);
+    background: linear-gradient(135deg,#FFFAE3,#FFF3E0);
     display:flex;
     justify-content:center;
     align-items:center;
@@ -17,10 +17,11 @@ body {
     background:white;
     padding:30px;
     border-radius:20px;
-    width:450px;
+    width:500px;
     text-align:center;
     box-shadow:0 10px 30px rgba(0,0,0,0.2);
     position:relative;
+    z-index:1;
 }
 h1{
     color:#ff5722;
@@ -40,13 +41,43 @@ button{
 button:hover{
     transform:scale(1.05);
 }
+.slider-container {
+    margin-top:15px;
+}
+input[type=range] {
+    -webkit-appearance:none;
+    width:100%;
+    height:12px;
+    border-radius:10px;
+    background: linear-gradient(90deg,#ffcc80,#ffb74d);
+    outline:none;
+    margin-top:8px;
+}
+input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance:none;
+    width:28px;
+    height:28px;
+    border-radius:50%;
+    background:#ff6f00;
+    cursor:pointer;
+    box-shadow:0 2px 5px rgba(0,0,0,0.3);
+}
+input[type=range]::-moz-range-thumb {
+    width:28px;
+    height:28px;
+    border-radius:50%;
+    background:#ff6f00;
+    cursor:pointer;
+    box-shadow:0 2px 5px rgba(0,0,0,0.3);
+}
 #progress{
     width:100%;
     height:30px;
-    background:#eee;
+    background:#ffe0b2;
     border-radius:20px;
     overflow:hidden;
     margin-top:20px;
+    box-shadow: inset 0 2px 5px rgba(0,0,0,0.1);
 }
 #bar{
     height:100%;
@@ -55,15 +86,17 @@ button:hover{
     transition:0.1s linear;
 }
 .volume-bar-container {
-    position:fixed;
+    position: fixed;
     bottom:20px;
     left:20px;
-    width:30px;
+    width:40px;
     height:150px;
-    background:#eee;
-    border-radius:15px;
-    display:none;
+    background:#ffe0b2;
+    border-radius:20px;
     overflow:hidden;
+    box-shadow: inset 0 2px 5px rgba(0,0,0,0.1);
+    display:none;
+    z-index:10;
 }
 .volume-bar {
     position:absolute;
@@ -76,15 +109,18 @@ button:hover{
 .volume-threshold {
     position:absolute;
     width:100%;
-    height:2px;
+    height:3px;
     background:red;
     bottom:8%;
 }
 .page{display:none;}
 .page.active{display:block;}
-canvas{border-radius:15px; cursor:pointer; margin-top:20px;}
-.slider-container {
-    margin-top:15px;
+canvas{border-radius:15px; cursor:pointer; margin-top:20px; box-shadow:0 5px 10px rgba(0,0,0,0.2);}
+#readPrize{
+    font-size:24px;
+    font-weight:bold;
+    color:#ff3d00;
+    margin-top:20px;
 }
 </style>
 </head>
@@ -96,8 +132,12 @@ canvas{border-radius:15px; cursor:pointer; margin-top:20px;}
 <div id="home" class="page active">
     <h1>🎉 课堂奖励系统</h1>
     <div class="slider-container">
-        <label>朗读时间控制</label><br>
-        <input type="range" id="timeSlider" min="10" max="120" value="30" step="5">
+        <label>朗读时间控制 (秒)</label>
+        <input type="range" id="timeSlider" min="10" max="900" value="60" step="10">
+    </div>
+    <div class="slider-container">
+        <label>声音阈值控制</label>
+        <input type="range" id="thresholdSlider" min="1" max="100" value="8" step="1">
     </div>
     <button onclick="chooseMode('scratch')">刮刮乐奖励</button>
     <button onclick="chooseMode('read')">朗读进度奖励</button>
@@ -106,7 +146,7 @@ canvas{border-radius:15px; cursor:pointer; margin-top:20px;}
 <!-- 刮刮乐页面 -->
 <div id="scratchPage" class="page">
     <h1>🎟️ 刮刮乐奖励</h1>
-    <canvas id="scratch" width="300" height="150"></canvas>
+    <canvas id="scratch" width="500" height="200"></canvas>
     <button onclick="backHome()">返回首页</button>
 </div>
 
@@ -117,20 +157,26 @@ canvas{border-radius:15px; cursor:pointer; margin-top:20px;}
     <div id="progress">
         <div id="bar"></div>
     </div>
-    <div id="readPrize" style="font-size:24px;font-weight:bold;color:#ff3d00;margin-top:20px;"></div>
+    <div id="readPrize"></div>
     <button onclick="backHome()">返回首页</button>
 </div>
 
+<!-- 屏幕左下音量进度条 -->
 <div class="volume-bar-container" id="volumeContainer">
     <div class="volume-bar" id="volumeBar"></div>
     <div class="volume-threshold" id="thresholdLine"></div>
 </div>
 
-</div>
-
 <script>
-// 奖励列表
-const prizes = ["🍪 小零食一份","⭐ 小红花","🎁 神秘奖励","🎉 减免一次作业","👏 老师表扬","😅 谢谢参与"];
+// 奖励及对应概率
+const prizes = [
+    {name:"🍪 小零食一份", prob:0.02},
+    {name:"⭐ 小红花", prob:0.05},
+    {name:"🎁 神秘奖励", prob:0.01},
+    {name:"🎉 减免一次作业", prob:0.01},
+    {name:"👏 老师表扬", prob:0.01},
+    {name:"😅 谢谢参与", prob:0.9}
+];
 
 // 页面切换
 function chooseMode(mode){
@@ -153,33 +199,38 @@ function backHome(){
 function initScratch(){
     const canvas = document.getElementById('scratch');
     const ctx = canvas.getContext('2d');
-    const prize = prizes[Math.floor(Math.random()*prizes.length)];
+    const rand = Math.random();
+    let sum = 0;
+    let prize = prizes[prizes.length-1].name;
+    for(let i=0;i<prizes.length;i++){
+        sum += prizes[i].prob;
+        if(rand <= sum){
+            prize = prizes[i].name;
+            break;
+        }
+    }
 
-    // 底层奖励
     const prizeCanvas = document.createElement('canvas');
     prizeCanvas.width = canvas.width;
     prizeCanvas.height = canvas.height;
     const pctx = prizeCanvas.getContext('2d');
     pctx.fillStyle = "#ff3d00";
-    pctx.font = "24px Comic Sans MS";
+    pctx.font = "36px Comic Sans MS";
     pctx.textAlign = "center";
     pctx.textBaseline = "middle";
     pctx.fillText(prize, canvas.width/2, canvas.height/2);
 
-    // 上层遮罩
     const overlay = document.createElement('canvas');
     overlay.width = canvas.width;
     overlay.height = canvas.height;
     const octx = overlay.getContext('2d');
-    octx.fillStyle = "#aaa";
+    octx.fillStyle = "#ccc";
     octx.fillRect(0,0,overlay.width,overlay.height);
 
-    // 初始显示
     ctx.drawImage(prizeCanvas,0,0);
     ctx.drawImage(overlay,0,0);
 
     let isDrawing = false;
-
     function startDraw(e){ isDrawing=true; draw(e); }
     function endDraw(){ isDrawing=false; }
     function draw(e){
@@ -190,7 +241,7 @@ function initScratch(){
 
         octx.globalCompositeOperation='destination-out';
         octx.beginPath();
-        octx.arc(x,y,20,0,Math.PI*2);
+        octx.arc(x,y,25,0,Math.PI*2);
         octx.fill();
 
         ctx.clearRect(0,0,canvas.width,canvas.height);
@@ -210,7 +261,7 @@ function initScratch(){
 // ===== 朗读奖励 =====
 let progress = 0;
 let readAnimation = null;
-let totalTime = 30; 
+let totalTime = 60; 
 let startTimestamp = null;
 
 const volumeContainer = document.getElementById('volumeContainer');
@@ -221,6 +272,9 @@ const readPrizeDiv = document.getElementById('readPrize');
 
 function startRead(){
     totalTime = parseInt(document.getElementById('timeSlider').value);
+    const threshold = parseInt(document.getElementById('thresholdSlider').value)/100;
+    thresholdLine.style.bottom=(threshold*100)+"%";
+
     volumeContainer.style.display='block';
     progress=0;
     bar.style.width="0%";
@@ -235,22 +289,18 @@ function startRead(){
         mic.connect(analyser);
         const data = new Uint8Array(analyser.frequencyBinCount);
 
-        const threshold = 0.08; // 降低阈值
-        thresholdLine.style.bottom=(threshold*100)+"%";
-
         function detect(){
             analyser.getByteFrequencyData(data);
             let sum = 0;
             for(let i=0;i<data.length;i++) sum+=data[i];
             let volume = sum/data.length/255;
-
             volumeBar.style.height=(volume*100)+"%";
 
-            let speedFactor = 100/totalTime; 
+            let speedFactor = 100/totalTime;
             if(volume>=threshold){
                 progress += speedFactor/60;
             } else {
-                progress -= speedFactor/120; 
+                progress -= speedFactor/120;
             }
             if(progress<0) progress=0;
             if(progress>100) progress=100;
@@ -276,7 +326,16 @@ function resetRead(){
 }
 
 function showReadPrize(){
-    const prize = prizes[Math.floor(Math.random()*prizes.length)];
+    const rand = Math.random();
+    let sum = 0;
+    let prize = prizes[prizes.length-1].name;
+    for(let i=0;i<prizes.length;i++){
+        sum += prizes[i].prob;
+        if(rand <= sum){
+            prize = prizes[i].name;
+            break;
+        }
+    }
     readPrizeDiv.innerHTML = "🎉 奖励："+prize;
 }
 </script>
